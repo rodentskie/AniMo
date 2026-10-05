@@ -1,6 +1,6 @@
 # History
 
-- Scaffold (**Oct 25, 2026**) - setup project initially
+- Scaffold (**Oct 5, 2026**) - setup project initially
 - Home Page (**Oct 5, 2026**) - build home page `/` from the mockup
   - Shared navbar (logo, nav links, light/dark toggle, menu on phones)
   - Hero with rice field background, ARIMAX description, page search bar, Get Started card, and AniMo mascot
