@@ -1,10 +1,14 @@
-import { Button, HStack } from "@chakra-ui/react"
+import { Box } from "@chakra-ui/react"
+import { Hero } from "@/components/home/Hero"
+import { Navbar } from "@/components/layout/Navbar"
 
 export default function Home() {
   return (
-    <HStack>
-      <Button>Click me</Button>
-      <Button>Click me</Button>
-    </HStack>
-  );
+    <Box minH="100dvh" bg="bg">
+      <Navbar />
+      <Box as="main">
+        <Hero />
+      </Box>
+    </Box>
+  )
 }
