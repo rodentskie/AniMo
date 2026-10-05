@@ -49,6 +49,11 @@
 - No inline styles
 - Dark mode first, light mode as option
 
+## Chakra UI
+
+- Run `npx @chakra-ui/cli snippet list` to list all snippet components
+- Once selected run `npx @chakra-ui/cli snippet add <name> --outdir components/ui/` where `<name>` is the snippet selected
+
 ## Data Fetching
 
 - Use `fetch` built-in function to consume API
