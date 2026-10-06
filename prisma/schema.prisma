@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────── Auth ─────────
+model User {
+  id           String    @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String    @unique
+  passwordHash String // bcryptjs
+  isActive     Boolean   @default(true)
+  tokenVersion Int       @default(0)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  roles       UserRole[]
+  predictions Prediction[]
+}
+
+model LoginAttempt {
+  id        BigInt   @id @default(autoincrement())
+  email     String // as typed (lowercased), may not match a User
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}
+
+// ───────── IAM ─────────
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users    UserRole[]
+  policies RolePolicy[]
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Policy {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  statements PolicyStatement[]
+  roles      RolePolicy[]
+}
+
+model RolePolicy {
+  roleId   String
+  policyId String
+
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, policyId])
+}
+
+enum Effect {
+  ALLOW
+  DENY
+}
+
+model PolicyStatement {
+  id        String   @id @default(cuid())
+  policyId  String
+  effect    Effect   @default(ALLOW)
+  actions   String[] // ["dataset:Read", "prediction:*"]
+  resources String[] // ["animo:field/*"]
+
+  policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([policyId])
+}
+
+// ───────── Domain ─────────
+enum Season {
+  WET
+  DRY
+}
+
+model Field {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  province     String?
+  municipality String?
+  barangay     String?
+  areaHa       Decimal  @db.Decimal(12, 2)
+  latitude     Decimal? @db.Decimal(9, 6)
+  longitude    Decimal? @db.Decimal(9, 6)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  yieldRecords YieldRecord[]
+  predictions  Prediction[]
+  evaluations  ModelEvaluation[]
+}
+
+model YieldRecord {
+  id            String   @id @default(cuid())
+  fieldId       String
+  year          Int
+  season        Season
+  areaHarvested Decimal  @db.Decimal(12, 2) // hectares
+  production    Decimal  @db.Decimal(14, 2) // metric tons
+  yieldPerHa    Decimal  @db.Decimal(8, 3) // t/ha
+  rainfall      Decimal  @db.Decimal(8, 2) // mm
+  temperature   Decimal  @db.Decimal(5, 2) // °C
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+
+  @@unique([fieldId, year, season])
+}
+
+model ArimaxModel {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  p         Int
+  d         Int
+  q         Int
+  P         Int      @default(0)
+  D         Int      @default(0)
+  Q         Int      @default(0)
+  s         Int      @default(2)
+  exogVars  String[] // ["rainfall", "temperature"]
+  isActive  Boolean  @default(false) // one active model used for predictions
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evaluations ModelEvaluation[]
+  predictions Prediction[]
+}
+
+model ModelEvaluation {
+  id          String   @id @default(cuid())
+  modelId     String
+  fieldId     String
+  trainFrom   Int // year
+  trainTo     Int // year
+  testSize    Int // seasons held out
+  mae         Float
+  rmse        Float
+  mape        Float
+  evaluatedAt DateTime @default(now())
+
+  model ArimaxModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  field Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@index([modelId, fieldId])
+}
+
+model Prediction {
+  id             String   @id @default(cuid())
+  modelId        String
+  fieldId        String
+  year           Int
+  season         Season
+  farmArea       Decimal  @db.Decimal(12, 2)
+  rainfall       Decimal  @db.Decimal(8, 2)
+  temperature    Decimal  @db.Decimal(5, 2)
+  estimatedYield Decimal  @db.Decimal(8, 3) // t/ha
+  estimatedProd  Decimal  @db.Decimal(14, 2) // estimatedYield × farmArea
+  lowerBound     Decimal? @db.Decimal(8, 3) // 95% CI
+  upperBound     Decimal? @db.Decimal(8, 3)
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  model     ArimaxModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  field     Field       @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  createdBy User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([fieldId, createdAt])
+}
+
+// ───────── Audit ─────────
+enum AuditAction {
+  INSERT
+  UPDATE
+  DELETE
+}
+
+model AuditLog {
+  id          BigInt      @id @default(autoincrement())
+  tableName   String
+  recordId    String
+  action      AuditAction
+  oldData     Json?
+  newData     Json?
+  changedById String? // from app.user_id; null = system/seed
+  changedAt   DateTime    @default(now())
+
+  @@index([tableName, recordId])
+  @@index([changedAt])
+}

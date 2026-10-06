@@ -12,3 +12,10 @@
   - ARIMAX uses the `arima` npm package; it was tested on sample data and models are refitted on each prediction
   - Audit log filled by Postgres triggers on the important tables
   - Login rate limiting stored in Postgres (`LoginAttempt`): 5 failed attempts per email or IP in 15 minutes, no Redis
+- Setup Prisma (**Oct 6, 2026**) - Prisma 7 + PostgreSQL with the full schema from `context/database-schema.md`
+  - `prisma.config.ts` holds the datasource URL and seed command; `.env` holds only `DATABASE_URL`
+  - `prisma-client` generator outputs to `src/generated/prisma` (gitignored, regenerated on `postinstall`); `prisma` pinned to 7.10 because npm `latest` points to an 8.0 RC
+  - Migrations: `init` (all tables) and `audit_triggers` (raw SQL trigger writing `AuditLog` for 9 tables, strips `passwordHash`, reads `app.user_id`)
+  - `src/lib/prisma.ts`: `server-only` Prisma Client singleton using `@prisma/adapter-pg`
+  - `prisma/seed.ts`: re-runnable seed of system policies, roles (Admin, Analyst, Viewer) and the `admin@animo.local` admin user
+  - `db:*` npm scripts for generate, migrate, deploy, status, seed and studio
