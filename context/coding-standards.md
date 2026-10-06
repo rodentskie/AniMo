@@ -54,10 +54,22 @@
 - Run `npx @chakra-ui/cli snippet list` to list all snippet components
 - Once selected run `npx @chakra-ui/cli snippet add <name> --outdir components/ui/` where `<name>` is the snippet selected
 
+## Database
+
+- Use Prisma ORM for all database operations
+- Always use `prisma migrate dev` for schema changes (not `db push`)
+- Run `prisma migrate status` before committing to verify migrations are in sync
+- Production deployments must run `prisma migrate deploy` before the app starts
+
 ## Data Fetching
 
-- Use `fetch` built-in function to consume API
-- Only client side data fetching, no need for server side data fetching for SEO
+- Server components fetch directly with Prisma
+- Client components use Server Actions
+- Validate all inputs with Zod
+
+## State management
+
+- Manage data states using `zustand`
 
 ## Error Handling
 
