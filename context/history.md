@@ -11,3 +11,4 @@
   - Domain: multiple rice fields, historical yield records, ARIMAX model configurations, per-field evaluations (MAE, RMSE, MAPE) and predictions
   - ARIMAX uses the `arima` npm package; it was tested on sample data and models are refitted on each prediction
   - Audit log filled by Postgres triggers on the important tables
+  - Login rate limiting stored in Postgres (`LoginAttempt`): 5 failed attempts per email or IP in 15 minutes, no Redis

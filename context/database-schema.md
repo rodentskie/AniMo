@@ -6,7 +6,7 @@ PostgreSQL 16 + Prisma ORM. Single-tenant: one deployment per client, so there i
 
 | Area   | Tables                                                          |
 | ------ | --------------------------------------------------------------- |
-| Auth   | `User`                                                          |
+| Auth   | `User`, `LoginAttempt`                                          |
 | IAM    | `Role`, `UserRole`, `Policy`, `RolePolicy`, `PolicyStatement`   |
 | Domain | `Field`, `YieldRecord`, `ArimaxModel`, `ModelEvaluation`, `Prediction` |
 | Audit  | `AuditLog` (populated by Postgres triggers)                     |
@@ -28,6 +28,15 @@ User  ──< Prediction
 - The JWT carries only `userId` and `tokenVersion`, never roles or permissions.
 - A server-side `getCurrentUser()` helper loads the user and their permissions from the database (cached per request). A session is rejected when `isActive = false` or `tokenVersion` does not match. Incrementing `tokenVersion` forces logout.
 - Every route requires login; there is no anonymous access.
+
+### Login rate limiting
+
+- Stored in Postgres (`LoginAttempt`), not in memory, because Vercel serverless instances don't share memory. No Redis.
+- In `authorize()`, before checking the password: reject the login if the **email** or the **IP** has **5 or more failed attempts in the last 15 minutes**. Show a generic "Too many attempts, try again later" message.
+- Every attempt is recorded, successful or not. On success, `User.lastLoginAt` is updated.
+- Unknown emails are recorded too, so attackers can't use the limit to check which emails exist.
+- Old rows (older than 30 days) are deleted by a scheduled cleanup (Vercel Cron).
+- Upgrade path: switch to Upstash Redis + `@upstash/ratelimit` if more endpoints need rate limiting or traffic grows.
 
 ## IAM (AWS-IAM-style RBAC)
 
@@ -91,6 +100,17 @@ model User {
 
   roles       UserRole[]
   predictions Prediction[]
+}
+
+model LoginAttempt {
+  id        BigInt   @id @default(autoincrement())
+  email     String   // as typed (lowercased), may not match a User
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
 }
 
 // ───────── IAM ─────────
@@ -283,7 +303,7 @@ model AuditLog {
 
 ### Conventions
 
-- IDs: `cuid()` strings (except `AuditLog`, which uses an auto-increment `BigInt`).
+- IDs: `cuid()` strings (except `AuditLog` and `LoginAttempt`, which use an auto-increment `BigInt`).
 - Measurements use `Decimal`; model metrics use `Float`.
 - `Field`, `ArimaxModel` and `User` are deactivated with `isActive`, not deleted, when they have history (`onDelete: Restrict`).
 
@@ -291,7 +311,7 @@ model AuditLog {
 
 - Implemented with Postgres triggers that write to `AuditLog` on `INSERT` / `UPDATE` / `DELETE`.
 - **Audited tables:** `User`, `UserRole`, `Role`, `RolePolicy`, `Policy`, `PolicyStatement`, `Field`, `YieldRecord`, `ArimaxModel`.
-- **Not audited:** `Prediction` (never edited; already has `createdById`), `ModelEvaluation` (derived data), `AuditLog`.
+- **Not audited:** `Prediction` (never edited; already has `createdById`), `ModelEvaluation` (derived data), `LoginAttempt` (already a log), `AuditLog`.
 - The trigger removes `passwordHash` from `User` rows before storing `oldData` / `newData`.
 - **Who made the change:** application writes run inside `prisma.$transaction` that first runs `SELECT set_config('app.user_id', <userId>, true)`. The trigger reads `current_setting('app.user_id', true)` into `changedById`. Writes without it (seed, manual SQL) store `null`.
 - Join tables (`UserRole`, `RolePolicy`) have no `id`, so `recordId` is the composite key joined with `:` (e.g. `<userId>:<roleId>`).
