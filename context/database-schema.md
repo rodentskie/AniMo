@@ -4,20 +4,22 @@ PostgreSQL 16 + Prisma ORM. Single-tenant: one deployment per client, so there i
 
 ## Overview
 
-| Area   | Tables                                                          |
-| ------ | --------------------------------------------------------------- |
-| Auth   | `User`, `LoginAttempt`                                          |
-| IAM    | `Role`, `UserRole`, `Policy`, `RolePolicy`, `PolicyStatement`   |
-| Domain | `Field`, `YieldRecord`, `ArimaxModel`, `ModelEvaluation`, `Prediction` |
-| Audit  | `AuditLog` (populated by Postgres triggers)                     |
+Table names are lowercase, plural and snake_case. Prisma models keep PascalCase names and map to their table with `@@map`.
+
+| Area   | Model → Table                                                                                                                             |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth   | `User` → `users`, `LoginAttempt` → `login_attempts`                                                                                       |
+| IAM    | `Role` → `roles`, `UserRole` → `user_roles`, `Policy` → `policies`, `RolePolicy` → `role_policies`, `PolicyStatement` → `policy_statements` |
+| Domain | `Field` → `fields`, `YieldRecord` → `yield_records`, `ArimaxModel` → `arimax_models`, `ModelEvaluation` → `model_evaluations`, `Prediction` → `predictions` |
+| Audit  | `AuditLog` → `audit_logs` (populated by Postgres triggers)                                                                                |
 
 ```
-User ──< UserRole >── Role ──< RolePolicy >── Policy ──< PolicyStatement
+users ──< user_roles >── roles ──< role_policies >── policies ──< policy_statements
 
-Field ──< YieldRecord
-Field ──< Prediction >── ArimaxModel
-Field ──< ModelEvaluation >── ArimaxModel
-User  ──< Prediction
+fields ──< yield_records
+fields ──< predictions >── arimax_models
+fields ──< model_evaluations >── arimax_models
+users  ──< predictions
 ```
 
 ## Authentication
@@ -31,7 +33,7 @@ User  ──< Prediction
 
 ### Login rate limiting
 
-- Stored in Postgres (`LoginAttempt`), not in memory, because Vercel serverless instances don't share memory. No Redis.
+- Stored in Postgres (`login_attempts`), not in memory, because Vercel serverless instances don't share memory. No Redis.
 - In `authorize()`, before checking the password: reject the login if the **email** or the **IP** has **5 or more failed attempts in the last 15 minutes**. Show a generic "Too many attempts, try again later" message.
 - Every attempt is recorded, successful or not. On success, `User.lastLoginAt` is updated.
 - Unknown emails are recorded too, so attackers can't use the limit to check which emails exist.
@@ -100,6 +102,8 @@ model User {
 
   roles       UserRole[]
   predictions Prediction[]
+
+  @@map("users")
 }
 
 model LoginAttempt {
@@ -111,6 +115,7 @@ model LoginAttempt {
 
   @@index([email, createdAt])
   @@index([ip, createdAt])
+  @@map("login_attempts")
 }
 
 // ───────── IAM ─────────
@@ -124,6 +129,8 @@ model Role {
 
   users    UserRole[]
   policies RolePolicy[]
+
+  @@map("roles")
 }
 
 model UserRole {
@@ -135,6 +142,7 @@ model UserRole {
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
+  @@map("user_roles")
 }
 
 model Policy {
@@ -147,6 +155,8 @@ model Policy {
 
   statements PolicyStatement[]
   roles      RolePolicy[]
+
+  @@map("policies")
 }
 
 model RolePolicy {
@@ -157,6 +167,7 @@ model RolePolicy {
   policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
   @@id([roleId, policyId])
+  @@map("role_policies")
 }
 
 enum Effect {
@@ -174,6 +185,7 @@ model PolicyStatement {
   policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
   @@index([policyId])
+  @@map("policy_statements")
 }
 
 // ───────── Domain ─────────
@@ -199,6 +211,8 @@ model Field {
   yieldRecords YieldRecord[]
   predictions  Prediction[]
   evaluations  ModelEvaluation[]
+
+  @@map("fields")
 }
 
 model YieldRecord {
@@ -217,6 +231,7 @@ model YieldRecord {
   field Field @relation(fields: [fieldId], references: [id], onDelete: Restrict)
 
   @@unique([fieldId, year, season])
+  @@map("yield_records")
 }
 
 model ArimaxModel {
@@ -236,6 +251,8 @@ model ArimaxModel {
 
   evaluations ModelEvaluation[]
   predictions Prediction[]
+
+  @@map("arimax_models")
 }
 
 model ModelEvaluation {
@@ -254,6 +271,7 @@ model ModelEvaluation {
   field Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
   @@index([modelId, fieldId])
+  @@map("model_evaluations")
 }
 
 model Prediction {
@@ -277,6 +295,7 @@ model Prediction {
   createdBy User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([fieldId, createdAt])
+  @@map("predictions")
 }
 
 // ───────── Audit ─────────
@@ -298,21 +317,23 @@ model AuditLog {
 
   @@index([tableName, recordId])
   @@index([changedAt])
+  @@map("audit_logs")
 }
 ```
 
 ### Conventions
 
+- Tables: lowercase, plural, snake_case via `@@map` (columns keep their camelCase field names).
 - IDs: `cuid()` strings (except `AuditLog` and `LoginAttempt`, which use an auto-increment `BigInt`).
 - Measurements use `Decimal`; model metrics use `Float`.
 - `Field`, `ArimaxModel` and `User` are deactivated with `isActive`, not deleted, when they have history (`onDelete: Restrict`).
 
 ## Audit Log
 
-- Implemented with Postgres triggers that write to `AuditLog` on `INSERT` / `UPDATE` / `DELETE`.
-- **Audited tables:** `User`, `UserRole`, `Role`, `RolePolicy`, `Policy`, `PolicyStatement`, `Field`, `YieldRecord`, `ArimaxModel`.
-- **Not audited:** `Prediction` (never edited; already has `createdById`), `ModelEvaluation` (derived data), `LoginAttempt` (already a log), `AuditLog`.
-- The trigger removes `passwordHash` from `User` rows before storing `oldData` / `newData`.
+- Implemented with Postgres triggers that write to `audit_logs` on `INSERT` / `UPDATE` / `DELETE`. `tableName` stores the database table name (e.g. `users`), not the Prisma model name.
+- **Audited tables:** `users`, `user_roles`, `roles`, `role_policies`, `policies`, `policy_statements`, `fields`, `yield_records`, `arimax_models`.
+- **Not audited:** `predictions` (never edited; already has `createdById`), `model_evaluations` (derived data), `login_attempts` (already a log), `audit_logs`.
+- The trigger removes `passwordHash` from `users` rows before storing `oldData` / `newData`.
 - **Who made the change:** application writes run inside `prisma.$transaction` that first runs `SELECT set_config('app.user_id', <userId>, true)`. The trigger reads `current_setting('app.user_id', true)` into `changedById`. Writes without it (seed, manual SQL) store `null`.
-- Join tables (`UserRole`, `RolePolicy`) have no `id`, so `recordId` is the composite key joined with `:` (e.g. `<userId>:<roleId>`).
+- Join tables (`user_roles`, `role_policies`) have no `id`, so `recordId` is the composite key joined with `:` (e.g. `<userId>:<roleId>`).
 - The trigger function and triggers are added as raw SQL in a migration created with `prisma migrate dev --create-only` and then edited, so we never use `db push`.

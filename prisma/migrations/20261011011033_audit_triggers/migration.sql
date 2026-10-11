@@ -1,4 +1,4 @@
--- Writes one "AuditLog" row per inserted, updated or deleted row.
+-- Writes one "audit_logs" row per inserted, updated or deleted row.
 -- "changedById" comes from `SELECT set_config('app.user_id', <userId>, true)`
 -- run inside the same transaction; it is null for seeds and manual SQL.
 CREATE OR REPLACE FUNCTION audit_log_trigger() RETURNS trigger
@@ -18,7 +18,7 @@ BEGIN
     new_data := to_jsonb(NEW);
   END IF;
 
-  IF TG_TABLE_NAME = 'User' THEN
+  IF TG_TABLE_NAME = 'users' THEN
     old_data := old_data - 'passwordHash';
     new_data := new_data - 'passwordHash';
   END IF;
@@ -26,12 +26,12 @@ BEGIN
   row_data := COALESCE(new_data, old_data);
 
   record_id := CASE TG_TABLE_NAME
-    WHEN 'UserRole' THEN (row_data ->> 'userId') || ':' || (row_data ->> 'roleId')
-    WHEN 'RolePolicy' THEN (row_data ->> 'roleId') || ':' || (row_data ->> 'policyId')
+    WHEN 'user_roles' THEN (row_data ->> 'userId') || ':' || (row_data ->> 'roleId')
+    WHEN 'role_policies' THEN (row_data ->> 'roleId') || ':' || (row_data ->> 'policyId')
     ELSE row_data ->> 'id'
   END;
 
-  INSERT INTO "AuditLog" ("tableName", "recordId", "action", "oldData", "newData", "changedById", "changedAt")
+  INSERT INTO "audit_logs" ("tableName", "recordId", "action", "oldData", "newData", "changedById", "changedAt")
   VALUES (
     TG_TABLE_NAME,
     record_id,
@@ -47,37 +47,37 @@ END;
 $$;
 
 CREATE TRIGGER audit_user
-AFTER INSERT OR UPDATE OR DELETE ON "User"
+AFTER INSERT OR UPDATE OR DELETE ON "users"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_user_role
-AFTER INSERT OR UPDATE OR DELETE ON "UserRole"
+AFTER INSERT OR UPDATE OR DELETE ON "user_roles"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_role
-AFTER INSERT OR UPDATE OR DELETE ON "Role"
+AFTER INSERT OR UPDATE OR DELETE ON "roles"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_role_policy
-AFTER INSERT OR UPDATE OR DELETE ON "RolePolicy"
+AFTER INSERT OR UPDATE OR DELETE ON "role_policies"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_policy
-AFTER INSERT OR UPDATE OR DELETE ON "Policy"
+AFTER INSERT OR UPDATE OR DELETE ON "policies"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_policy_statement
-AFTER INSERT OR UPDATE OR DELETE ON "PolicyStatement"
+AFTER INSERT OR UPDATE OR DELETE ON "policy_statements"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_field
-AFTER INSERT OR UPDATE OR DELETE ON "Field"
+AFTER INSERT OR UPDATE OR DELETE ON "fields"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_yield_record
-AFTER INSERT OR UPDATE OR DELETE ON "YieldRecord"
+AFTER INSERT OR UPDATE OR DELETE ON "yield_records"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 CREATE TRIGGER audit_arimax_model
-AFTER INSERT OR UPDATE OR DELETE ON "ArimaxModel"
+AFTER INSERT OR UPDATE OR DELETE ON "arimax_models"
 FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();

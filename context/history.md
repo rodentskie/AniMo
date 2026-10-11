@@ -19,3 +19,8 @@
   - `src/lib/prisma.ts`: `server-only` Prisma Client singleton using `@prisma/adapter-pg`
   - `prisma/seed.ts`: re-runnable seed of system policies, roles (Admin, Analyst, Viewer) and the `admin@animo.local` admin user
   - `db:*` npm scripts for generate, migrate, deploy, status, seed and studio
+- Lowercase Plural Table Names (**Oct 11, 2026**) - map every Prisma model to a lowercase, plural, snake_case table with `@@map`
+  - `User` → `users`, `LoginAttempt` → `login_attempts`, `UserRole` → `user_roles`, `AuditLog` → `audit_logs`, etc.; model names and columns unchanged
+  - Deleted and recreated the `init` and `audit_triggers` migrations; trigger SQL now uses the new table names, so `audit_logs.tableName` stores e.g. `users`
+  - Updated `context/database-schema.md` (overview, diagram, schema block, audit log, conventions)
+  - Existing local databases need `prisma migrate reset` and `npm run db:generate`
