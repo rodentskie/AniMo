@@ -24,3 +24,9 @@
   - Deleted and recreated the `init` and `audit_triggers` migrations; trigger SQL now uses the new table names, so `audit_logs.tableName` stores e.g. `users`
   - Updated `context/database-schema.md` (overview, diagram, schema block, audit log, conventions)
   - Existing local databases need `prisma migrate reset` and `npm run db:generate`
+- Auth Setup and Login Page (**Oct 11, 2026**) - email + password login with `next-auth@4.24.15` (Credentials provider, JWT sessions, no adapter)
+  - `/login` page: rice field image on the left 3/4 with opacity and left/bottom fades, form on the right; image hidden on small screens; no sign-up or forgot password
+  - `authorize()` validates with Zod, rate limits 5 failed attempts per email or IP in 15 minutes, records every attempt in `login_attempts`, compares unknown emails against a dummy hash, and updates `lastLoginAt` with the user set as the audit actor
+  - JWT and session carry only `userId` and `tokenVersion`; `getCurrentUser()` (`server-only`, React `cache()`) rejects inactive users and stale `tokenVersion`
+  - `src/proxy.ts` uses `withAuth` as an optimistic check; `/` and `/login` re-check with `getCurrentUser()`
+  - Chakra toaster (bottom-right) for login errors; `NEXTAUTH_SECRET` and `NEXTAUTH_URL` added to `.env.example`
