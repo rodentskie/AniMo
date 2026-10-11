@@ -22,6 +22,8 @@ model User {
 
   roles       UserRole[]
   predictions Prediction[]
+
+  @@map("users")
 }
 
 model LoginAttempt {
@@ -33,6 +35,7 @@ model LoginAttempt {
 
   @@index([email, createdAt])
   @@index([ip, createdAt])
+  @@map("login_attempts")
 }
 
 // ───────── IAM ─────────
@@ -46,6 +49,8 @@ model Role {
 
   users    UserRole[]
   policies RolePolicy[]
+
+  @@map("roles")
 }
 
 model UserRole {
@@ -57,6 +62,7 @@ model UserRole {
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
+  @@map("user_roles")
 }
 
 model Policy {
@@ -69,6 +75,8 @@ model Policy {
 
   statements PolicyStatement[]
   roles      RolePolicy[]
+
+  @@map("policies")
 }
 
 model RolePolicy {
@@ -79,6 +87,7 @@ model RolePolicy {
   policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
   @@id([roleId, policyId])
+  @@map("role_policies")
 }
 
 enum Effect {
@@ -96,6 +105,7 @@ model PolicyStatement {
   policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
   @@index([policyId])
+  @@map("policy_statements")
 }
 
 // ───────── Domain ─────────
@@ -121,6 +131,8 @@ model Field {
   yieldRecords YieldRecord[]
   predictions  Prediction[]
   evaluations  ModelEvaluation[]
+
+  @@map("fields")
 }
 
 model YieldRecord {
@@ -139,6 +151,7 @@ model YieldRecord {
   field Field @relation(fields: [fieldId], references: [id], onDelete: Restrict)
 
   @@unique([fieldId, year, season])
+  @@map("yield_records")
 }
 
 model ArimaxModel {
@@ -158,6 +171,8 @@ model ArimaxModel {
 
   evaluations ModelEvaluation[]
   predictions Prediction[]
+
+  @@map("arimax_models")
 }
 
 model ModelEvaluation {
@@ -176,6 +191,7 @@ model ModelEvaluation {
   field Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
   @@index([modelId, fieldId])
+  @@map("model_evaluations")
 }
 
 model Prediction {
@@ -199,6 +215,7 @@ model Prediction {
   createdBy User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([fieldId, createdAt])
+  @@map("predictions")
 }
 
 // ───────── Audit ─────────
@@ -220,4 +237,5 @@ model AuditLog {
 
   @@index([tableName, recordId])
   @@index([changedAt])
+  @@map("audit_logs")
 }
