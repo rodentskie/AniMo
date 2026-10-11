@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { EmotionRegistry } from "@/components/ui/emotion-registry"
 import { Provider } from "@/components/ui/provider"
+import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
   title: {
@@ -18,6 +19,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
         <EmotionRegistry>
           <Provider defaultTheme="dark">
             {props.children}
+            <Toaster />
           </Provider>
         </EmotionRegistry>
       </body>
