@@ -6,20 +6,23 @@ PostgreSQL 16 + Prisma ORM. Single-tenant: one deployment per client, so there i
 
 Table names are lowercase, plural and snake_case. Prisma models keep PascalCase names and map to their table with `@@map`.
 
-| Area   | Model → Table                                                                                                                             |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth   | `User` → `users`, `LoginAttempt` → `login_attempts`                                                                                       |
-| IAM    | `Role` → `roles`, `UserRole` → `user_roles`, `Policy` → `policies`, `RolePolicy` → `role_policies`, `PolicyStatement` → `policy_statements` |
-| Domain | `Field` → `fields`, `YieldRecord` → `yield_records`, `ArimaxModel` → `arimax_models`, `ModelEvaluation` → `model_evaluations`, `Prediction` → `predictions` |
-| Audit  | `AuditLog` → `audit_logs` (populated by Postgres triggers)                                                                                |
+| Area   | Model → Table                                                                                                                                                                                       |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth   | `User` → `users`, `LoginAttempt` → `login_attempts`                                                                                                                                                 |
+| IAM    | `Role` → `roles`, `UserRole` → `user_roles`, `Policy` → `policies`, `RolePolicy` → `role_policies`, `PolicyStatement` → `policy_statements`                                                         |
+| Domain | `Location` → `locations`, `ProductionRecord` → `production_records`, `ArimaModel` → `arima_models`, `ModelEvaluation` → `model_evaluations`, `Prediction` → `predictions`, `PredictionPoint` → `prediction_points` |
+| Feedback | `Feedback` → `feedback`                                                                                                                                                                           |
+| Audit  | `AuditLog` → `audit_logs` (populated by Postgres triggers)                                                                                                                                          |
 
 ```
 users ──< user_roles >── roles ──< role_policies >── policies ──< policy_statements
 
-fields ──< yield_records
-fields ──< predictions >── arimax_models
-fields ──< model_evaluations >── arimax_models
+locations ──< production_records
+locations ──< predictions >── arima_models
+predictions ──< prediction_points
+locations ──< model_evaluations >── arima_models
 users  ──< predictions
+users  ──< feedback
 ```
 
 ## Authentication
@@ -46,43 +49,45 @@ users  ──< predictions
 - **PolicyStatement**: `effect` (`ALLOW` / `DENY`) + `actions[]` + `resources[]`.
 - **Role**: a bundle of policies, assigned to users (many-to-many).
 - **Evaluation**: an explicit `DENY` wins, then any `ALLOW`, otherwise denied (implicit deny).
-- `*` is a wildcard in actions (`dataset:*`, `*`) and resources (`animo:field/*`, `*`).
-- Resource format: `animo:<resource>/<id>`, e.g. `animo:field/clx123`, `animo:prediction/*`.
+- `*` is a wildcard in actions (`dataset:*`, `*`) and resources (`animo:location/*`, `*`).
+- Resource format: `animo:<resource>/<id>`, e.g. `animo:location/clx123`, `animo:prediction/*`.
 
 ### Resources and actions
 
-| Resource     | Description                                   | Actions                                                   |
-| ------------ | --------------------------------------------- | --------------------------------------------------------- |
-| `field`      | Rice fields/assets of the client              | `Read`, `Create`, `Update`, `Delete`                      |
-| `dataset`    | Historical yield records (`YieldRecord`)      | `Read`, `Create`, `Update`, `Delete`, `Import`            |
-| `model`      | ARIMAX model configurations                   | `Read`, `Create`, `Update`, `Delete`, `Activate`          |
-| `evaluation` | MAE / RMSE / MAPE results (`ModelEvaluation`) | `Read`, `Run`                                             |
-| `prediction` | Yield estimation runs                         | `Read`, `Run`, `Delete`                                   |
-| `dashboard`  | Charts and trends                             | `Read`                                                    |
-| `iam`        | Users, roles, policies                        | `ReadUsers`, `ManageUsers`, `ManageRoles`, `ManagePolicies` |
-| `audit`      | Audit log                                     | `Read`                                                    |
+| Resource     | Description                                        | Actions                                                     |
+| ------------ | -------------------------------------------------- | ----------------------------------------------------------- |
+| `location`   | Provinces / areas the client tracks                | `Read`, `Create`, `Update`, `Delete`                        |
+| `dataset`    | Historical production records (`ProductionRecord`) | `Read`, `Create`, `Update`, `Delete`, `Import`              |
+| `model`      | ARIMA model configurations                         | `Read`, `Create`, `Update`, `Delete`, `Activate`            |
+| `evaluation` | MAE / RMSE / MAPE results (`ModelEvaluation`)      | `Read`, `Run`                                               |
+| `prediction` | Forecast runs                                      | `Read`, `Run`, `Delete`                                     |
+| `feedback`   | User ratings shown on the Evaluation screen        | `Read`, `Submit`, `Delete`                                  |
+| `dashboard`  | Charts and trends                                  | `Read`                                                      |
+| `iam`        | Users, roles, policies                             | `ReadUsers`, `ManageUsers`, `ManageRoles`, `ManagePolicies` |
+| `audit`      | Audit log                                          | `Read`                                                      |
 
 ### Seeded roles and policies (`isSystem = true`)
 
-| Role        | Policies                                                                                     |
-| ----------- | -------------------------------------------------------------------------------------------- |
-| **Admin**   | `AdministratorAccess`: `ALLOW *` on `*`                                                      |
-| **Analyst** | `ALLOW field:*, dataset:*, model:*, evaluation:*, prediction:Read, prediction:Run, dashboard:Read` on `*` |
-| **Viewer**  | `ALLOW field:Read, dataset:Read, model:Read, evaluation:Read, prediction:Read, prediction:Run, dashboard:Read` on `*` |
+| Role        | Policies                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin**   | `AdministratorAccess`: `ALLOW *` on `*`                                                                                               |
+| **Analyst** | `ALLOW location:*, dataset:*, model:*, evaluation:*, prediction:Read, prediction:Run, feedback:Read, feedback:Submit, dashboard:Read` on `*` |
+| **Viewer**  | `ALLOW location:Read, dataset:Read, model:Read, evaluation:Read, prediction:Read, prediction:Run, feedback:Read, feedback:Submit, dashboard:Read` on `*` |
 
-- Predictions are visible to every logged-in user (`prediction:Read` on `animo:prediction/*` for all roles). Only Admin can delete them.
-- Because resources are named per field (`animo:field/<id>`), a policy could later restrict a user to specific fields. For now every policy uses `*`.
+- Predictions and feedback are visible to every logged-in user. Only Admin can delete them.
+- Because resources are named per location (`animo:location/<id>`), a policy could later restrict a user to specific locations. For now every policy uses `*`.
 - System roles and policies cannot be deleted.
 
-## ARIMAX (`arima` npm package)
+## ARIMA (`arima` npm package)
 
-- Uses [`arima`](https://www.npmjs.com/package/arima) (SARIMAX via WebAssembly) and runs server-side in Next.js. It may need to be listed in `serverExternalPackages`.
-- Fitted models cannot be saved or reloaded, so `ArimaxModel` stores **configuration only** and the model is refitted per field on each prediction or evaluation. This is fast: about 5–35 ms for 24 seasons in testing.
-- One time series per field, ordered by `(year, season)` with `WET` before `DRY`. The seasonal period is `s = 2`.
-- Exogenous inputs are `rainfall` and `temperature`. The target is `yieldPerHa`. Estimated production = `estimatedYield × farmArea`.
-- `predict()` returns error variances; the 95% CI is `pred ± 1.96·√variance`.
-- Evaluation: fit on the first `n − testSize` seasons, predict the last `testSize`, and compute MAE / RMSE / MAPE in our own code.
-- Fields with gaps in their seasons, or with fewer than about 10 seasons of data, cannot be modelled; the UI flags this (checked in code, not in the schema).
+- Uses [`arima`](https://www.npmjs.com/package/arima) (ARIMA via WebAssembly) and runs server-side in Next.js. It may need to be listed in `serverExternalPackages`.
+- Univariate ARIMA: no exogenous variables. The target is yearly `production` (MT).
+- One time series per **location + irrigation status**, ordered by `year`. Data is yearly, so there is no seasonal component.
+- Fitted models cannot be saved or reloaded, so `ArimaModel` stores **configuration only** (`p`, `d`, `q`) and the model is refitted on each prediction or evaluation.
+- A prediction forecasts `horizon` years after the last recorded year (default 5). `predict()` returns error variances; the 95% CI is `pred ± 1.96·√variance`.
+- **Production outlook**: compare the average forecast with the historical average of the series. `HIGH` if more than 5% above, `LOW` if more than 5% below, otherwise `MODERATE` (threshold is a constant in code). The UI shows `HIGH` as "Favorable" and derives the planting recommendation text from the outlook.
+- Evaluation: fit on the first `n − testSize` years, predict the last `testSize`, and compute MAE / RMSE / MAPE in our own code.
+- Series with missing years, or with fewer than about 10 years of data, cannot be modelled; the UI flags this (checked in code, not in the schema).
 
 ## Prisma Schema
 
@@ -102,6 +107,7 @@ model User {
 
   roles       UserRole[]
   predictions Prediction[]
+  feedback    Feedback[]
 
   @@map("users")
 }
@@ -180,7 +186,7 @@ model PolicyStatement {
   policyId  String
   effect    Effect   @default(ALLOW)
   actions   String[] // ["dataset:Read", "prediction:*"]
-  resources String[] // ["animo:field/*"]
+  resources String[] // ["animo:location/*"]
 
   policy Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
@@ -189,62 +195,55 @@ model PolicyStatement {
 }
 
 // ───────── Domain ─────────
-enum Season {
-  WET
-  DRY
+enum IrrigationStatus {
+  IRRIGATED
+  NON_IRRIGATED
 }
 
-model Field {
+enum ProductionOutlook {
+  HIGH
+  MODERATE
+  LOW
+}
+
+model Location {
   id           String   @id @default(cuid())
-  code         String   @unique
-  name         String
-  province     String?
+  province     String
   municipality String?
   barangay     String?
-  areaHa       Decimal  @db.Decimal(12, 2)
-  latitude     Decimal? @db.Decimal(9, 6)
-  longitude    Decimal? @db.Decimal(9, 6)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  yieldRecords YieldRecord[]
-  predictions  Prediction[]
-  evaluations  ModelEvaluation[]
+  productionRecords ProductionRecord[]
+  predictions       Prediction[]
+  evaluations       ModelEvaluation[]
 
-  @@map("fields")
+  @@unique([province, municipality, barangay])
+  @@map("locations")
 }
 
-model YieldRecord {
-  id            String   @id @default(cuid())
-  fieldId       String
-  year          Int
-  season        Season
-  areaHarvested Decimal  @db.Decimal(12, 2) // hectares
-  production    Decimal  @db.Decimal(14, 2) // metric tons
-  yieldPerHa    Decimal  @db.Decimal(8, 3)  // t/ha
-  rainfall      Decimal  @db.Decimal(8, 2)  // mm
-  temperature   Decimal  @db.Decimal(5, 2)  // °C
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model ProductionRecord {
+  id         String           @id @default(cuid())
+  locationId String
+  year       Int
+  irrigation IrrigationStatus
+  production Decimal          @db.Decimal(14, 2) // metric tons
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
-  field Field @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
 
-  @@unique([fieldId, year, season])
-  @@map("yield_records")
+  @@unique([locationId, irrigation, year])
+  @@map("production_records")
 }
 
-model ArimaxModel {
+model ArimaModel {
   id        String   @id @default(cuid())
   name      String   @unique
   p         Int
   d         Int
   q         Int
-  P         Int      @default(0)
-  D         Int      @default(0)
-  Q         Int      @default(0)
-  s         Int      @default(2)
-  exogVars  String[] // ["rainfall", "temperature"]
   isActive  Boolean  @default(false) // one active model used for predictions
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -252,50 +251,79 @@ model ArimaxModel {
   evaluations ModelEvaluation[]
   predictions Prediction[]
 
-  @@map("arimax_models")
+  @@map("arima_models")
 }
 
 model ModelEvaluation {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   modelId     String
-  fieldId     String
-  trainFrom   Int      // year
-  trainTo     Int      // year
-  testSize    Int      // seasons held out
+  locationId  String
+  irrigation  IrrigationStatus
+  trainFrom   Int              // year
+  trainTo     Int              // year
+  testSize    Int              // years held out
   mae         Float
   rmse        Float
   mape        Float
-  evaluatedAt DateTime @default(now())
+  evaluatedAt DateTime         @default(now())
 
-  model ArimaxModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
-  field Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  model    ArimaModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  location Location   @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
-  @@index([modelId, fieldId])
+  @@index([modelId, locationId, irrigation])
   @@map("model_evaluations")
 }
 
 model Prediction {
-  id             String   @id @default(cuid())
+  id             String            @id @default(cuid())
   modelId        String
-  fieldId        String
-  year           Int
-  season         Season
-  farmArea       Decimal  @db.Decimal(12, 2)
-  rainfall       Decimal  @db.Decimal(8, 2)
-  temperature    Decimal  @db.Decimal(5, 2)
-  estimatedYield Decimal  @db.Decimal(8, 3)  // t/ha
-  estimatedProd  Decimal  @db.Decimal(14, 2) // estimatedYield × farmArea
-  lowerBound     Decimal? @db.Decimal(8, 3)  // 95% CI
-  upperBound     Decimal? @db.Decimal(8, 3)
+  locationId     String
+  irrigation     IrrigationStatus
+  lastActualYear Int               // last year of data the model was fitted on
+  horizon        Int               // number of years forecast
+  historicalAvg  Decimal           @db.Decimal(14, 2) // MT, for the outlook
+  outlook        ProductionOutlook
   createdById    String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime          @default(now())
 
-  model     ArimaxModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
-  field     Field       @relation(fields: [fieldId], references: [id], onDelete: Restrict)
-  createdBy User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  model     ArimaModel        @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  location  Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  points    PredictionPoint[]
 
-  @@index([fieldId, createdAt])
+  @@index([locationId, irrigation, createdAt])
   @@map("predictions")
+}
+
+model PredictionPoint {
+  id           String  @id @default(cuid())
+  predictionId String
+  year         Int
+  production   Decimal  @db.Decimal(14, 2) // forecast MT
+  lowerBound   Decimal? @db.Decimal(14, 2) // 95% CI
+  upperBound   Decimal? @db.Decimal(14, 2)
+
+  prediction Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+
+  @@unique([predictionId, year])
+  @@map("prediction_points")
+}
+
+// ───────── Feedback ─────────
+model Feedback {
+  id                  String   @id @default(cuid())
+  userId              String
+  usability           Int      // 1–5
+  clarity             Int      // 1–5
+  functionality       Int      // 1–5
+  practicalUsefulness Int      // 1–5
+  comment             String?
+  createdAt           DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("feedback")
 }
 
 // ───────── Audit ─────────
@@ -323,16 +351,17 @@ model AuditLog {
 
 ### Conventions
 
-- Tables: lowercase, plural, snake_case via `@@map` (columns keep their camelCase field names).
+- Tables: lowercase, plural, snake_case via `@@map` (columns keep their camelCase field names). `feedback` is uncountable, so it stays singular.
 - IDs: `cuid()` strings (except `AuditLog` and `LoginAttempt`, which use an auto-increment `BigInt`).
-- Measurements use `Decimal`; model metrics use `Float`.
-- `Field`, `ArimaxModel` and `User` are deactivated with `isActive`, not deleted, when they have history (`onDelete: Restrict`).
+- Measurements use `Decimal`; model metrics use `Float`; ratings use `Int` (1–5, validated with Zod).
+- `Location`, `ArimaModel` and `User` are deactivated with `isActive`, not deleted, when they have history (`onDelete: Restrict`).
+- Feedback averages on the Evaluation screen are computed with `prisma.feedback.aggregate({ _avg })`, not stored.
 
 ## Audit Log
 
 - Implemented with Postgres triggers that write to `audit_logs` on `INSERT` / `UPDATE` / `DELETE`. `tableName` stores the database table name (e.g. `users`), not the Prisma model name.
-- **Audited tables:** `users`, `user_roles`, `roles`, `role_policies`, `policies`, `policy_statements`, `fields`, `yield_records`, `arimax_models`.
-- **Not audited:** `predictions` (never edited; already has `createdById`), `model_evaluations` (derived data), `login_attempts` (already a log), `audit_logs`.
+- **Audited tables:** `users`, `user_roles`, `roles`, `role_policies`, `policies`, `policy_statements`, `locations`, `production_records`, `arima_models`.
+- **Not audited:** `predictions` and `prediction_points` (never edited; already have `createdById`), `model_evaluations` (derived data), `feedback` (never edited; already has `userId`), `login_attempts` (already a log), `audit_logs`.
 - The trigger removes `passwordHash` from `users` rows before storing `oldData` / `newData`.
 - **Who made the change:** application writes run inside `prisma.$transaction` that first runs `SELECT set_config('app.user_id', <userId>, true)`. The trigger reads `current_setting('app.user_id', true)` into `changedById`. Writes without it (seed, manual SQL) store `null`.
 - Join tables (`user_roles`, `role_policies`) have no `id`, so `recordId` is the composite key joined with `:` (e.g. `<userId>:<roleId>`).
