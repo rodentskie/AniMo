@@ -24,8 +24,7 @@ export function Hero() {
         <Stack gap="6" maxW="xl">
           <Logo size="lg" />
           <Text fontSize={{ base: "md", md: "lg" }} fontWeight="medium">
-            An ARIMAX (Autoregressive Integrated Moving Average with Exogenous Variables) Time-Series
-            Model for Predicting Rice Yield Trends.
+            An ARIMA-Based Web Platform for Estimating Rice Production
           </Text>
           <Text fontSize="sm" fontWeight="semibold" color={{ base: "green.700", _dark: "green.300" }}>
             Smarter data. Healthier harvests.

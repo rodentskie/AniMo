@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: "%s | AniMo",
   },
   description:
-    "AniMo estimates rice yield trends using an ARIMAX (Autoregressive Integrated Moving Average with Exogenous Variables) time-series model.",
+    "AniMo estimates rice production using an ARIMA (Autoregressive Integrated Moving Average) time-series model.",
 }
 
 export default function RootLayout(props: { children: React.ReactNode }) {

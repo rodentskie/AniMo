@@ -30,3 +30,9 @@
   - JWT and session carry only `userId` and `tokenVersion`; `getCurrentUser()` (`server-only`, React `cache()`) rejects inactive users and stale `tokenVersion`
   - `src/proxy.ts` uses `withAuth` as an optimistic check; `/` and `/login` re-check with `getCurrentUser()`
   - Chakra toaster (bottom-right) for login errors; `NEXTAUTH_SECRET` and `NEXTAUTH_URL` added to `.env.example`
+- Prisma ARIMA Update (**Nov 27, 2026**) - move the database from the ARIMAX design to ARIMA (yearly rice production per location and irrigation status)
+  - Removed `Season`, `Field`, `YieldRecord`, `ArimaxModel`; added `IrrigationStatus`, `ProductionOutlook`, `Location`, `ProductionRecord`, `ArimaModel`, `PredictionPoint`, `Feedback`
+  - `ModelEvaluation` now uses `locationId` + `irrigation` and years; `Prediction` is a forecast run (`horizon`, `historicalAvg`, `outlook`) with yearly `PredictionPoint`s; `User` has a `feedback` relation
+  - `arima_domain` migration drops the old tables (their triggers go with them) and adds audit triggers on `locations`, `production_records`, `arima_models`; no triggers on predictions, prediction points, evaluations or feedback
+  - Seed: `field:*` → `location:*`, Analyst and Viewer get `feedback:Read` and `feedback:Submit`
+  - Replaced ARIMAX wording in the layout metadata and home hero
