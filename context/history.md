@@ -43,3 +43,7 @@
   - `src/lib/guards.ts`: `requirePermission()` (redirect to `/login` or `forbidden()`), `authorize()` for Server Actions, `can()` for hiding UI, and `PERMISSION_DENIED_ERROR`
   - `experimental.authInterrupts` enabled; `src/app/forbidden.tsx` shows a friendly "no access" page with a link home
   - Types in `src/types/iam.ts`: `Statement`, `CurrentUser`
+- Audited Write Helper (**Nov 27, 2026**) - helper so audit triggers record who made each change
+  - `src/lib/audit.ts` (`server-only`): `withAuditUser(userId, fn)` runs an interactive `prisma.$transaction`, first `SELECT set_config('app.user_id', ${userId}, true)` (parameterised, transaction-local so it never leaks to pooled connections), then `fn(tx)`
+  - `authorize()` now updates `lastLoginAt` through `withAuditUser` (same behaviour, replaces the manual batch transaction)
+  - Rule: every application write to an audited table must go through `withAuditUser`
