@@ -36,3 +36,10 @@
   - `arima_domain` migration drops the old tables (their triggers go with them) and adds audit triggers on `locations`, `production_records`, `arima_models`; no triggers on predictions, prediction points, evaluations or feedback
   - Seed: `field:*` → `location:*`, Analyst and Viewer get `feedback:Read` and `feedback:Submit`
   - Replaced ARIMAX wording in the layout metadata and home hero
+- IAM Authorization (**Nov 27, 2026**) - load each user's permissions and check them on the server
+  - `src/lib/iam.ts` (`server-only`): `matches()` (`*` wildcard, whole-string, other regex characters escaped), `isAllowed()` (explicit `DENY` wins, then `ALLOW`, otherwise implicit deny), `resourceArn()` and `defaultResource()` (`dataset:Create` → `animo:dataset/*`)
+  - `getCurrentUser()` loads roles → policies → statements and returns `roleNames` and flattened `statements`; still `cache()`d with the `isActive` / `tokenVersion` checks
+  - Prisma `relationJoins` preview feature enabled so the nested lookup is one SQL query (was 6); `join` is now the default relation strategy app-wide
+  - `src/lib/guards.ts`: `requirePermission()` (redirect to `/login` or `forbidden()`), `authorize()` for Server Actions, `can()` for hiding UI, and `PERMISSION_DENIED_ERROR`
+  - `experimental.authInterrupts` enabled; `src/app/forbidden.tsx` shows a friendly "no access" page with a link home
+  - Types in `src/types/iam.ts`: `Statement`, `CurrentUser`
