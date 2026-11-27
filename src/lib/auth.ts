@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { NextAuthOptions, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
+import { withAuditUser } from "@/lib/audit";
 import {
   RATE_LIMIT_MESSAGE,
   getClientIp,
@@ -21,10 +22,9 @@ async function verifyCredentials(email: string, password: string) {
 }
 
 async function markLoggedIn(userId: string) {
-  await prisma.$transaction([
-    prisma.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`,
-    prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } }),
-  ]);
+  await withAuditUser(userId, (tx) =>
+    tx.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } }),
+  );
 }
 
 async function authorize(
