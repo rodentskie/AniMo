@@ -30,7 +30,7 @@ export function GetStartedCard() {
         </Text>
       </HStack>
       <Button asChild colorPalette="green" rounded="full" flexShrink="0">
-        <NextLink href="#">
+        <NextLink href="/data">
           Get Started <LuArrowRight />
         </NextLink>
       </Button>

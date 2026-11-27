@@ -14,10 +14,16 @@ import { usePathname } from "next/navigation"
 import { LuMenu } from "react-icons/lu"
 import { ColorModeButton } from "@/components/ui/color-mode"
 import { Logo } from "@/components/layout/Logo"
-import { NAV_ITEMS } from "@/lib/nav"
+import { UserMenu, type NavUser } from "@/components/layout/UserMenu"
+import { isActivePath, NAV_ITEMS, TOP_BAR_ITEMS } from "@/lib/nav"
 
-export function Navbar() {
+interface NavbarProps {
+  user: NavUser
+}
+
+export function Navbar({ user }: NavbarProps) {
   const pathname = usePathname()
+  const currentPage = (href: string) => (isActivePath(pathname, href) ? "page" : undefined)
 
   return (
     <Box
@@ -35,9 +41,9 @@ export function Navbar() {
         </NextLink>
 
         <HStack as="nav" gap="8" hideBelow="md">
-          {NAV_ITEMS.map((item) => (
+          {TOP_BAR_ITEMS.map((item) => (
             <ChakraLink
-              key={item.label}
+              key={item.href}
               asChild
               fontSize="sm"
               fontWeight="medium"
@@ -51,7 +57,7 @@ export function Navbar() {
                 borderColor: { base: "green.700", _dark: "green.300" },
               }}
             >
-              <NextLink href={item.href} aria-current={pathname === item.href ? "page" : undefined}>
+              <NextLink href={item.href} aria-current={currentPage(item.href)}>
                 {item.label}
               </NextLink>
             </ChakraLink>
@@ -60,6 +66,7 @@ export function Navbar() {
 
         <HStack gap="1">
           <ColorModeButton />
+          <UserMenu user={user} />
           <Menu.Root>
             <Menu.Trigger asChild>
               <IconButton aria-label="Open menu" variant="ghost" size="sm" hideFrom="md">
@@ -70,8 +77,16 @@ export function Navbar() {
               <Menu.Positioner>
                 <Menu.Content>
                   {NAV_ITEMS.map((item) => (
-                    <Menu.Item key={item.label} value={item.label} asChild>
-                      <NextLink href={item.href}>{item.label}</NextLink>
+                    <Menu.Item
+                      key={item.href}
+                      value={item.href}
+                      asChild
+                      _currentPage={{ color: { base: "green.700", _dark: "green.300" }, fontWeight: "semibold" }}
+                    >
+                      <NextLink href={item.href} aria-current={currentPage(item.href)}>
+                        <item.icon />
+                        {item.label}
+                      </NextLink>
                     </Menu.Item>
                   ))}
                 </Menu.Content>

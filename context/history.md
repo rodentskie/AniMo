@@ -47,3 +47,9 @@
   - `src/lib/audit.ts` (`server-only`): `withAuditUser(userId, fn)` runs an interactive `prisma.$transaction`, first `SELECT set_config('app.user_id', ${userId}, true)` (parameterised, transaction-local so it never leaks to pooled connections), then `fn(tx)`
   - `authorize()` now updates `lastLoginAt` through `withAuditUser` (same behaviour, replaces the manual batch transaction)
   - Rule: every application write to an audited table must go through `withAuditUser`
+- App Navigation (**Nov 27, 2026**) - navbar links, user menu with logout, and placeholder pages
+  - `src/lib/nav.ts`: six routes with `react-icons/lu` icons; top bar shows Home, Data, Prediction, Evaluation; Definition of Terms and Settings live in the user menu; phone menu lists all six
+  - `isActivePath()` sets `aria-current` on exact and child routes (e.g. `/settings/users` → Settings)
+  - `UserMenu`: avatar button next to the color mode toggle, shows full name and role names, links to Terms and Settings, and Log out via `signOut({ callbackUrl: "/login" })`
+  - `AppShell` (Navbar + main) receives the user from each page's `getCurrentUser()`; no shared layout so `/login` stays without a navbar
+  - Placeholder pages `/data`, `/prediction`, `/evaluation`, `/terms`, `/settings` (heading only, redirect to `/login` when logged out); home "Get Started" → `/data`
