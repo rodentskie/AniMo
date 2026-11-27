@@ -53,3 +53,12 @@
   - `UserMenu`: avatar button next to the color mode toggle, shows full name and role names, links to Terms and Settings, and Log out via `signOut({ callbackUrl: "/login" })`
   - `AppShell` (Navbar + main) receives the user from each page's `getCurrentUser()`; no shared layout so `/login` stays without a navbar
   - Placeholder pages `/data`, `/prediction`, `/evaluation`, `/terms`, `/settings` (heading only, redirect to `/login` when logged out); home "Get Started" → `/data`
+- Locations Management (**Nov 27, 2026**) - Admins and Analysts manage the locations that production data is recorded for
+  - `/settings/locations` (`requirePermission("location:Read")`): table of Province, Municipality, Barangay, Status, record count and row actions; "Locations" card on `/settings` shown with `location:Read`
+  - Buttons depend on permissions: Add (`location:Create`), Edit and Activate / Deactivate (`location:Update`), Delete (`location:Delete`, hidden when the location has production records, predictions or evaluations); Viewers see the list only
+  - `src/actions/locations.ts`: `createLocation`, `updateLocation`, `setLocationActive`, `deleteLocation` (authorize → Zod → `withAuditUser` → `revalidatePath` → `{ success, data, error }`)
+  - Duplicates are checked in the transaction (ignoring case) because Postgres treats `NULL`s as distinct in the unique index; `P2002` also maps to "This location already exists"
+  - Delete re-checks history on the server and returns "This location has data. Deactivate it instead."
+  - `src/types/location.ts`: Zod schema (province 1–100, municipality / barangay max 100, empty → `null`), `LocationRow`, `ActionResult<T>`; `src/lib/location.ts`: `formatLocation()` → "Barangay, Municipality, Province"
+  - Chakra `Dialog` for add / edit, and an `alertdialog` delete confirmation that enables the Delete button only after typing "delete"
+  - Settings card renders the icon as a child of `Icon` (passing `as={LuMapPin}` from a server component fails at runtime)
